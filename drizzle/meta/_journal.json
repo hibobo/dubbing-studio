@@ -15,6 +15,13 @@
       "when": 1790152256977,
       "tag": "0001_tiresome_spitfire",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1790154173232,
+      "tag": "0002_bright_scalphunter",
+      "breakpoints": true
     }
   ]
 }

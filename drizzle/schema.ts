@@ -33,6 +33,7 @@ export const dubbingProjects = mysqlTable("dubbing_projects", {
   durationMs: int("durationMs"),
   sourceLanguage: varchar("sourceLanguage", { length: 16 }).default("en"),
   targetLanguage: varchar("targetLanguage", { length: 16 }).default("cmn-CN"),
+  waveformJson: text("waveformJson"),
   status: mysqlEnum("status", ["draft", "transcribing", "editing", "processing", "ready", "failed"]).default("draft").notNull(),
   backgroundGain: int("backgroundGain").default(82).notNull(),
   voiceGain: int("voiceGain").default(100).notNull(),
@@ -67,6 +68,16 @@ export const processingJobs = mysqlTable("processing_jobs", {
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
+export const projectVersions = mysqlTable("project_versions", {
+  id: int("id").autoincrement().primaryKey(),
+  projectId: int("projectId").notNull(),
+  ownerOpenId: varchar("ownerOpenId", { length: 64 }).notNull(),
+  label: varchar("label", { length: 255 }).notNull(),
+  snapshotJson: text("snapshotJson").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
 export type DubbingProject = typeof dubbingProjects.$inferSelect;
 export type DubbingSegment = typeof dubbingSegments.$inferSelect;
 export type ProcessingJob = typeof processingJobs.$inferSelect;
+export type ProjectVersion = typeof projectVersions.$inferSelect;

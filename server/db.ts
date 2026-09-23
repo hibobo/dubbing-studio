@@ -5,6 +5,7 @@ import {
   InsertUser,
   dubbingProjects,
   dubbingSegments,
+  projectVersions,
   processingJobs,
   users,
 } from "../drizzle/schema";
@@ -66,6 +67,15 @@ export async function listProjects(ownerOpenId: string) {
   return db.select().from(dubbingProjects).where(eq(dubbingProjects.ownerOpenId, ownerOpenId)).orderBy(asc(dubbingProjects.updatedAt));
 }
 
+export async function createProjectForOwner(input: { ownerOpenId: string; name: string; sourceUrl?: string; durationMs?: number; sourceLanguage?: string; targetLanguage?: string; waveformJson?: string }) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const inserted = await db.insert(dubbingProjects).values({ ownerOpenId: input.ownerOpenId, name: input.name, sourceUrl: input.sourceUrl, durationMs: input.durationMs, sourceLanguage: input.sourceLanguage ?? "en", targetLanguage: input.targetLanguage ?? "cmn-CN", waveformJson: input.waveformJson, status: "draft" });
+  const projectId = Number(inserted[0].insertId);
+  const result = await db.select().from(dubbingProjects).where(eq(dubbingProjects.id, projectId)).limit(1);
+  return result[0];
+}
+
 export async function getProjectForOwner(projectId: number, ownerOpenId: string) {
   const db = await getDb();
   if (!db) return undefined;
@@ -74,6 +84,35 @@ export async function getProjectForOwner(projectId: number, ownerOpenId: string)
   if (!project) return undefined;
   const segments = await db.select().from(dubbingSegments).where(eq(dubbingSegments.projectId, projectId)).orderBy(asc(dubbingSegments.segmentIndex));
   return { project, segments };
+}
+
+export async function saveProjectVersion(projectId: number, ownerOpenId: string, label: string, snapshotJson: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const project = await db.select({ id: dubbingProjects.id }).from(dubbingProjects).where(and(eq(dubbingProjects.id, projectId), eq(dubbingProjects.ownerOpenId, ownerOpenId))).limit(1);
+  if (!project[0]) return undefined;
+  const inserted = await db.insert(projectVersions).values({ projectId, ownerOpenId, label, snapshotJson });
+  return Number(inserted[0].insertId);
+}
+
+export async function listProjectVersions(projectId: number, ownerOpenId: string) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(projectVersions).where(and(eq(projectVersions.projectId, projectId), eq(projectVersions.ownerOpenId, ownerOpenId))).orderBy(asc(projectVersions.createdAt));
+}
+
+export async function restoreProjectVersion(projectId: number, ownerOpenId: string, versionId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const version = await db.select().from(projectVersions).where(and(eq(projectVersions.id, versionId), eq(projectVersions.projectId, projectId), eq(projectVersions.ownerOpenId, ownerOpenId))).limit(1);
+  if (!version[0]) return undefined;
+  const snapshot = JSON.parse(version[0].snapshotJson) as { segments?: Array<{ id: number; startMs: number; endMs: number; speaker: string; sourceText: string; targetText: string; voicePreset?: string | null }> };
+  if (snapshot.segments) {
+    for (const segment of snapshot.segments) {
+      await db.update(dubbingSegments).set({ startMs: segment.startMs, endMs: segment.endMs, speaker: segment.speaker, sourceText: segment.sourceText, targetText: segment.targetText, voicePreset: segment.voicePreset ?? null, updatedAt: new Date() }).where(and(eq(dubbingSegments.id, segment.id), eq(dubbingSegments.projectId, projectId)));
+    }
+  }
+  return getProjectForOwner(projectId, ownerOpenId);
 }
 
 export async function updateSegmentForOwner(projectId: number, ownerOpenId: string, segmentId: number, patch: Partial<Pick<DubbingSegment, "startMs" | "endMs" | "speaker" | "sourceText" | "targetText" | "voicePreset">>) {

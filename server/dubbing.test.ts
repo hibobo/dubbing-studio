@@ -34,4 +34,14 @@ describe("dubbing project procedures", () => {
     const caller = createCaller();
     await expect(caller.projects.updateMix({ projectId: 1, backgroundGain: -1, voiceGain: 100 })).rejects.toThrow();
   });
+
+  it("requires a project name when creating an upload project", async () => {
+    const caller = createCaller();
+    await expect(caller.projects.create({ name: "" })).rejects.toThrow();
+  });
+
+  it("requires a bounded snapshot payload for version saves", async () => {
+    const caller = createCaller();
+    await expect(caller.projects.saveVersion({ projectId: 1, label: "", snapshotJson: "{}" })).rejects.toThrow();
+  });
 });
