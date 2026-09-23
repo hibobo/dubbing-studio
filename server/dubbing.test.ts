@@ -44,4 +44,10 @@ describe("dubbing project procedures", () => {
     const caller = createCaller();
     await expect(caller.projects.saveVersion({ projectId: 1, label: "", snapshotJson: "{}" })).rejects.toThrow();
   });
+
+  it("rejects remote version operations with invalid identifiers", async () => {
+    const caller = createCaller();
+    await expect(caller.projects.versions({ projectId: 0 })).rejects.toThrow();
+    await expect(caller.projects.restoreVersion({ projectId: 1, versionId: 0 })).rejects.toThrow();
+  });
 });

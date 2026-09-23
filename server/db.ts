@@ -7,6 +7,8 @@ import {
   dubbingSegments,
   projectVersions,
   processingJobs,
+  uploadParts,
+  uploadSessions,
   users,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
@@ -67,11 +69,14 @@ export async function listProjects(ownerOpenId: string) {
   return db.select().from(dubbingProjects).where(eq(dubbingProjects.ownerOpenId, ownerOpenId)).orderBy(asc(dubbingProjects.updatedAt));
 }
 
-export async function createProjectForOwner(input: { ownerOpenId: string; name: string; sourceUrl?: string; durationMs?: number; sourceLanguage?: string; targetLanguage?: string; waveformJson?: string }) {
+export async function createProjectForOwner(input: { ownerOpenId: string; name: string; sourceUrl?: string; durationMs?: number; sourceLanguage?: string; targetLanguage?: string; waveformJson?: string; segments?: Array<{ id: number; startMs: number; endMs: number; role: string; source: string; target: string; confidence?: number }> }) {
   const db = await getDb();
   if (!db) return undefined;
   const inserted = await db.insert(dubbingProjects).values({ ownerOpenId: input.ownerOpenId, name: input.name, sourceUrl: input.sourceUrl, durationMs: input.durationMs, sourceLanguage: input.sourceLanguage ?? "en", targetLanguage: input.targetLanguage ?? "cmn-CN", waveformJson: input.waveformJson, status: "draft" });
   const projectId = Number(inserted[0].insertId);
+  if (input.segments?.length) {
+    await db.insert(dubbingSegments).values(input.segments.map((segment, index) => ({ projectId, segmentIndex: index, startMs: segment.startMs, endMs: segment.endMs, speaker: segment.role, sourceText: segment.source, targetText: segment.target, confidence: segment.confidence ?? null })));
+  }
   const result = await db.select().from(dubbingProjects).where(eq(dubbingProjects.id, projectId)).limit(1);
   return result[0];
 }
@@ -140,4 +145,42 @@ export async function enqueueProcessingJob(projectId: number, ownerOpenId: strin
   if (!project[0]) return undefined;
   const inserted = await db.insert(processingJobs).values({ projectId, kind, status: "queued", progress: 0, message: "等待处理节点接收" });
   return inserted;
+}
+
+export async function createUploadSession(input: { id: string; ownerOpenId: string; fileName: string; contentType: string; totalBytes: number; chunkSize: number; totalParts: number }) {
+  const db = await getDb();
+  if (!db) return undefined;
+  await db.insert(uploadSessions).values({ ...input, status: "active" });
+  return db.select().from(uploadSessions).where(eq(uploadSessions.id, input.id)).limit(1).then((rows) => rows[0]);
+}
+
+export async function getUploadSessionForOwner(id: string, ownerOpenId: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const session = await db.select().from(uploadSessions).where(and(eq(uploadSessions.id, id), eq(uploadSessions.ownerOpenId, ownerOpenId))).limit(1);
+  if (!session[0]) return undefined;
+  const parts = await db.select().from(uploadParts).where(eq(uploadParts.sessionId, id)).orderBy(asc(uploadParts.partIndex));
+  return { session: session[0], parts };
+}
+
+export async function saveUploadPart(input: { sessionId: string; partIndex: number; sizeBytes: number; storageKey: string }) {
+  const db = await getDb();
+  if (!db) return undefined;
+  await db.delete(uploadParts).where(and(eq(uploadParts.sessionId, input.sessionId), eq(uploadParts.partIndex, input.partIndex)));
+  await db.insert(uploadParts).values(input);
+  return input;
+}
+
+export async function completeUploadSession(id: string, ownerOpenId: string, finalUrl: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  await db.update(uploadSessions).set({ status: "completed", finalUrl, updatedAt: new Date() }).where(and(eq(uploadSessions.id, id), eq(uploadSessions.ownerOpenId, ownerOpenId)));
+  return getUploadSessionForOwner(id, ownerOpenId);
+}
+
+export async function cancelUploadSession(id: string, ownerOpenId: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  await db.update(uploadSessions).set({ status: "cancelled", updatedAt: new Date() }).where(and(eq(uploadSessions.id, id), eq(uploadSessions.ownerOpenId, ownerOpenId)));
+  return true;
 }

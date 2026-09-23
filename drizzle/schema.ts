@@ -77,7 +77,32 @@ export const projectVersions = mysqlTable("project_versions", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
+export const uploadSessions = mysqlTable("upload_sessions", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  ownerOpenId: varchar("ownerOpenId", { length: 64 }).notNull(),
+  fileName: varchar("fileName", { length: 255 }).notNull(),
+  contentType: varchar("contentType", { length: 128 }).notNull(),
+  totalBytes: int("totalBytes").notNull(),
+  chunkSize: int("chunkSize").notNull(),
+  totalParts: int("totalParts").notNull(),
+  status: mysqlEnum("status", ["active", "completed", "cancelled"]).default("active").notNull(),
+  finalUrl: text("finalUrl"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export const uploadParts = mysqlTable("upload_parts", {
+  id: int("id").autoincrement().primaryKey(),
+  sessionId: varchar("sessionId", { length: 64 }).notNull(),
+  partIndex: int("partIndex").notNull(),
+  sizeBytes: int("sizeBytes").notNull(),
+  storageKey: text("storageKey").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
 export type DubbingProject = typeof dubbingProjects.$inferSelect;
 export type DubbingSegment = typeof dubbingSegments.$inferSelect;
 export type ProcessingJob = typeof processingJobs.$inferSelect;
 export type ProjectVersion = typeof projectVersions.$inferSelect;
+export type UploadSession = typeof uploadSessions.$inferSelect;
+export type UploadPart = typeof uploadParts.$inferSelect;

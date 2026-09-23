@@ -22,6 +22,13 @@
       "when": 1790154173232,
       "tag": "0002_bright_scalphunter",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1790158442065,
+      "tag": "0003_groovy_black_cat",
+      "breakpoints": true
     }
   ]
 }
