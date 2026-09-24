@@ -12,6 +12,7 @@ const segmentPatch = z.object({
   sourceText: z.string().min(1).optional(),
   targetText: z.string().min(1).optional(),
   voicePreset: z.string().max(64).nullable().optional(),
+  voiceGain: z.number().int().min(0).max(160).optional(),
 });
 
 export const appRouter = router({
@@ -26,7 +27,7 @@ export const appRouter = router({
   }),
   projects: router({
     list: protectedProcedure.query(({ ctx }) => listProjects(ctx.user.openId)),
-    create: protectedProcedure.input(z.object({ name: z.string().min(1).max(255), sourceUrl: z.string().min(1).max(2000).optional(), durationMs: z.number().int().positive().optional(), sourceLanguage: z.string().max(16).optional(), targetLanguage: z.string().max(16).optional(), waveformJson: z.string().max(2_000_000).optional(), segments: z.array(z.object({ id: z.number().int().positive(), startMs: z.number().int().nonnegative(), endMs: z.number().int().positive(), role: z.string().min(1).max(64), source: z.string().min(1), target: z.string().min(1), confidence: z.number().int().min(0).max(100).optional() })).max(500).optional() })).mutation(({ ctx, input }) => createProjectForOwner({ ...input, ownerOpenId: ctx.user.openId })),
+    create: protectedProcedure.input(z.object({ name: z.string().min(1).max(255), sourceUrl: z.string().min(1).max(2000).optional(), durationMs: z.number().int().positive().optional(), sourceLanguage: z.string().max(16).optional(), targetLanguage: z.string().max(16).optional(), waveformJson: z.string().max(2_000_000).optional(), segments: z.array(z.object({ id: z.number().int().positive(), startMs: z.number().int().nonnegative(), endMs: z.number().int().positive(), role: z.string().min(1).max(64), source: z.string().min(1), target: z.string().min(1), confidence: z.number().int().min(0).max(100).optional(), voiceGain: z.number().int().min(0).max(160).optional() })).max(500).optional() })).mutation(({ ctx, input }) => createProjectForOwner({ ...input, ownerOpenId: ctx.user.openId })),
     get: protectedProcedure.input(z.object({ projectId: z.number().int().positive() })).query(({ ctx, input }) => getProjectForOwner(input.projectId, ctx.user.openId)),
     updateSegment: protectedProcedure.input(z.object({ projectId: z.number().int().positive(), segmentId: z.number().int().positive(), patch: segmentPatch })).mutation(({ ctx, input }) => updateSegmentForOwner(input.projectId, ctx.user.openId, input.segmentId, input.patch)),
     updateMix: protectedProcedure.input(z.object({ projectId: z.number().int().positive(), backgroundGain: z.number().int().min(0).max(140), voiceGain: z.number().int().min(0).max(160) })).mutation(({ ctx, input }) => updateMixForOwner(input.projectId, ctx.user.openId, input.backgroundGain, input.voiceGain)),

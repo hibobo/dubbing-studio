@@ -5,6 +5,7 @@ import {
   InsertUser,
   dubbingProjects,
   dubbingSegments,
+  exportJobs,
   projectVersions,
   processingJobs,
   uploadParts,
@@ -69,13 +70,13 @@ export async function listProjects(ownerOpenId: string) {
   return db.select().from(dubbingProjects).where(eq(dubbingProjects.ownerOpenId, ownerOpenId)).orderBy(asc(dubbingProjects.updatedAt));
 }
 
-export async function createProjectForOwner(input: { ownerOpenId: string; name: string; sourceUrl?: string; durationMs?: number; sourceLanguage?: string; targetLanguage?: string; waveformJson?: string; segments?: Array<{ id: number; startMs: number; endMs: number; role: string; source: string; target: string; confidence?: number }> }) {
+export async function createProjectForOwner(input: { ownerOpenId: string; name: string; sourceUrl?: string; durationMs?: number; sourceLanguage?: string; targetLanguage?: string; waveformJson?: string; segments?: Array<{ id: number; startMs: number; endMs: number; role: string; source: string; target: string; confidence?: number; voiceGain?: number }> }) {
   const db = await getDb();
   if (!db) return undefined;
   const inserted = await db.insert(dubbingProjects).values({ ownerOpenId: input.ownerOpenId, name: input.name, sourceUrl: input.sourceUrl, durationMs: input.durationMs, sourceLanguage: input.sourceLanguage ?? "en", targetLanguage: input.targetLanguage ?? "cmn-CN", waveformJson: input.waveformJson, status: "draft" });
   const projectId = Number(inserted[0].insertId);
   if (input.segments?.length) {
-    await db.insert(dubbingSegments).values(input.segments.map((segment, index) => ({ projectId, segmentIndex: index, startMs: segment.startMs, endMs: segment.endMs, speaker: segment.role, sourceText: segment.source, targetText: segment.target, confidence: segment.confidence ?? null })));
+    await db.insert(dubbingSegments).values(input.segments.map((segment, index) => ({ projectId, segmentIndex: index, startMs: segment.startMs, endMs: segment.endMs, speaker: segment.role, sourceText: segment.source, targetText: segment.target, voiceGain: segment.voiceGain ?? 100, confidence: segment.confidence ?? null })));
   }
   const result = await db.select().from(dubbingProjects).where(eq(dubbingProjects.id, projectId)).limit(1);
   return result[0];
@@ -111,16 +112,16 @@ export async function restoreProjectVersion(projectId: number, ownerOpenId: stri
   if (!db) return undefined;
   const version = await db.select().from(projectVersions).where(and(eq(projectVersions.id, versionId), eq(projectVersions.projectId, projectId), eq(projectVersions.ownerOpenId, ownerOpenId))).limit(1);
   if (!version[0]) return undefined;
-  const snapshot = JSON.parse(version[0].snapshotJson) as { segments?: Array<{ id: number; startMs: number; endMs: number; speaker: string; sourceText: string; targetText: string; voicePreset?: string | null }> };
+  const snapshot = JSON.parse(version[0].snapshotJson) as { segments?: Array<{ id: number; startMs: number; endMs: number; speaker: string; sourceText: string; targetText: string; voicePreset?: string | null; voiceGain?: number }> };
   if (snapshot.segments) {
     for (const segment of snapshot.segments) {
-      await db.update(dubbingSegments).set({ startMs: segment.startMs, endMs: segment.endMs, speaker: segment.speaker, sourceText: segment.sourceText, targetText: segment.targetText, voicePreset: segment.voicePreset ?? null, updatedAt: new Date() }).where(and(eq(dubbingSegments.id, segment.id), eq(dubbingSegments.projectId, projectId)));
+      await db.update(dubbingSegments).set({ startMs: segment.startMs, endMs: segment.endMs, speaker: segment.speaker, sourceText: segment.sourceText, targetText: segment.targetText, voicePreset: segment.voicePreset ?? null, voiceGain: segment.voiceGain ?? 100, updatedAt: new Date() }).where(and(eq(dubbingSegments.id, segment.id), eq(dubbingSegments.projectId, projectId)));
     }
   }
   return getProjectForOwner(projectId, ownerOpenId);
 }
 
-export async function updateSegmentForOwner(projectId: number, ownerOpenId: string, segmentId: number, patch: Partial<Pick<DubbingSegment, "startMs" | "endMs" | "speaker" | "sourceText" | "targetText" | "voicePreset">>) {
+export async function updateSegmentForOwner(projectId: number, ownerOpenId: string, segmentId: number, patch: Partial<Pick<DubbingSegment, "startMs" | "endMs" | "speaker" | "sourceText" | "targetText" | "voicePreset" | "voiceGain">>) {
   const db = await getDb();
   if (!db) return undefined;
   const project = await db.select({ id: dubbingProjects.id }).from(dubbingProjects).where(and(eq(dubbingProjects.id, projectId), eq(dubbingProjects.ownerOpenId, ownerOpenId))).limit(1);
@@ -182,5 +183,29 @@ export async function cancelUploadSession(id: string, ownerOpenId: string) {
   const db = await getDb();
   if (!db) return undefined;
   await db.update(uploadSessions).set({ status: "cancelled", updatedAt: new Date() }).where(and(eq(uploadSessions.id, id), eq(uploadSessions.ownerOpenId, ownerOpenId)));
+  return true;
+}
+
+export async function createExportJob(projectId: number, ownerOpenId: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const project = await db.select({ id: dubbingProjects.id }).from(dubbingProjects).where(and(eq(dubbingProjects.id, projectId), eq(dubbingProjects.ownerOpenId, ownerOpenId))).limit(1);
+  if (!project[0]) return undefined;
+  const id = crypto.randomUUID().replace(/-/g, "");
+  await db.insert(exportJobs).values({ id, projectId, ownerOpenId, status: "queued", progress: 0, message: "等待处理节点合成" });
+  return { id };
+}
+
+export async function getExportJobForOwner(id: string, ownerOpenId: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const rows = await db.select().from(exportJobs).where(and(eq(exportJobs.id, id), eq(exportJobs.ownerOpenId, ownerOpenId))).limit(1);
+  return rows[0];
+}
+
+export async function cancelExportJobForOwner(id: string, ownerOpenId: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  await db.update(exportJobs).set({ status: "cancelled", message: "用户取消导出", updatedAt: new Date() }).where(and(eq(exportJobs.id, id), eq(exportJobs.ownerOpenId, ownerOpenId)));
   return true;
 }

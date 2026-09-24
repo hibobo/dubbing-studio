@@ -134,6 +134,43 @@ async function startServer() {
       res.status(502).json({ error: "处理节点暂时不可用" });
     }
   });
+  app.get("/api/processing/preview/:taskId", async (req, res) => {
+    const user = await authenticate(req);
+    if (!user) { res.status(401).json({ error: "登录后才能查看试听任务" }); return; }
+    if (!ENV.processingNodeUrl) { res.status(503).json({ error: "尚未配置处理节点", code: "PROCESSING_NODE_NOT_CONFIGURED" }); return; }
+    const upstream = await fetch(`${ENV.processingNodeUrl.replace(/\/$/, "")}/preview/${encodeURIComponent(String(req.params.taskId))}`, { headers: { ...(ENV.processingNodeToken ? { authorization: `Bearer ${ENV.processingNodeToken}` } : {}) } });
+    res.status(upstream.status).type("application/json").send(await upstream.text());
+  });
+  app.delete("/api/processing/preview/:taskId", async (req, res) => {
+    const user = await authenticate(req);
+    if (!user) { res.status(401).json({ error: "登录后才能取消试听任务" }); return; }
+    if (!ENV.processingNodeUrl) { res.status(503).json({ error: "尚未配置处理节点", code: "PROCESSING_NODE_NOT_CONFIGURED" }); return; }
+    const upstream = await fetch(`${ENV.processingNodeUrl.replace(/\/$/, "")}/preview/${encodeURIComponent(String(req.params.taskId))}`, { method: "DELETE", headers: { ...(ENV.processingNodeToken ? { authorization: `Bearer ${ENV.processingNodeToken}` } : {}) } });
+    res.status(upstream.status).type("application/json").send(await upstream.text());
+  });
+  app.post("/api/processing/export", async (req, res) => {
+    const user = await authenticate(req);
+    if (!user) { res.status(401).json({ error: "登录后才能导出视频" }); return; }
+    if (!ENV.processingNodeUrl) { res.status(503).json({ error: "尚未配置处理节点", code: "PROCESSING_NODE_NOT_CONFIGURED" }); return; }
+    try {
+      const upstream = await fetch(`${ENV.processingNodeUrl.replace(/\/$/, "")}/export`, { method: "POST", headers: { "content-type": "application/json", ...(ENV.processingNodeToken ? { authorization: `Bearer ${ENV.processingNodeToken}` } : {}) }, body: JSON.stringify({ ...req.body, ownerOpenId: user.openId }) });
+      res.status(upstream.status).type("application/json").send(await upstream.text());
+    } catch { res.status(502).json({ error: "处理节点暂时不可用" }); }
+  });
+  app.get("/api/processing/export/:taskId", async (req, res) => {
+    const user = await authenticate(req);
+    if (!user) { res.status(401).json({ error: "登录后才能查看导出任务" }); return; }
+    if (!ENV.processingNodeUrl) { res.status(503).json({ error: "尚未配置处理节点", code: "PROCESSING_NODE_NOT_CONFIGURED" }); return; }
+    const upstream = await fetch(`${ENV.processingNodeUrl.replace(/\/$/, "")}/export/${encodeURIComponent(String(req.params.taskId))}`, { headers: { ...(ENV.processingNodeToken ? { authorization: `Bearer ${ENV.processingNodeToken}` } : {}) } });
+    res.status(upstream.status).type("application/json").send(await upstream.text());
+  });
+  app.delete("/api/processing/export/:taskId", async (req, res) => {
+    const user = await authenticate(req);
+    if (!user) { res.status(401).json({ error: "登录后才能取消导出" }); return; }
+    if (!ENV.processingNodeUrl) { res.status(503).json({ error: "尚未配置处理节点", code: "PROCESSING_NODE_NOT_CONFIGURED" }); return; }
+    const upstream = await fetch(`${ENV.processingNodeUrl.replace(/\/$/, "")}/export/${encodeURIComponent(String(req.params.taskId))}`, { method: "DELETE", headers: { ...(ENV.processingNodeToken ? { authorization: `Bearer ${ENV.processingNodeToken}` } : {}) } });
+    res.status(upstream.status).type("application/json").send(await upstream.text());
+  });
   registerStorageProxy(app);
   registerOAuthRoutes(app);
   // tRPC API
