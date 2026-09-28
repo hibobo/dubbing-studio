@@ -20,6 +20,12 @@ This repository contains the WebDev full-stack source used by the application:
 - Background-audio mixing controls;
 - Final export task and download link through an external processing node.
 
+## Documentation
+
+- [中文用户使用手册](docs/USER_GUIDE.zh-CN.md) — 从上传视频到编辑对白、试听、混音、版本回退和导出的完整操作说明；
+- [中文本地开发与部署指南](docs/LOCAL_DEVELOPMENT.zh-CN.md) — 环境要求、环境变量、数据库初始化、开发命令、生产构建和处理节点接入；
+- [Processing node API documentation](https://github.com/hibobo/gpt-sovits-processing-node/blob/main/docs/API.md) — external processing adapter API and examples.
+
 ## Requirements
 
 - Node.js 22 or later;
